@@ -33,9 +33,18 @@ namespace RefactorThis.Domain.Invoices.Services
                 throw new InvalidOperationException("There is no invoice matching this payment");
             }
 
-            if (invoice.Amount == 0)
+            var invoiceModel = new AddInvoiceModel
             {
-                if (invoice.Payments == null || !invoice.Payments.Any())
+                Amount = invoice.Amount,
+                Payments = invoice.Payments,
+                AmountPaid = invoice.AmountPaid,
+                TaxAmount = invoice.TaxAmount,
+                Type = invoice.Type
+            };
+
+            if (invoiceModel.Amount == 0)
+            {
+                if (invoiceModel.Payments == null || !invoiceModel.Payments.Any())
                 {
                     responseMessage = "no payment needed";
                 }
@@ -46,89 +55,24 @@ namespace RefactorThis.Domain.Invoices.Services
             }
             else
             {
-                if (invoice.Payments != null && invoice.Payments.Any())
+                if (invoiceModel.Payments != null && invoiceModel.Payments.Any())
                 {
-                    responseMessage = ProcessFirstPayment(payment, invoice);
+                    responseMessage = ProcessFirstPayment(payment, invoiceModel);
                 }
                 else
                 {
-                    responseMessage = ProcessSubsequentPayment(payment, invoice);
+                    responseMessage = ProcessSubsequentPayment(payment, invoiceModel);
                 }
             }
 
-            AddInvoice(invoice);
+            AddInvoice(invoiceModel);
 
             return responseMessage;
         }
 
-        private void AddInvoice(Invoice invoice)
-        {
-            if (invoice.Amount == 0 && invoice.Payments.Count == 0)
-            {
-                return;
-            }
-            
-            _addInvoice.Handle(new AddInvoiceModel
-            {
-                Amount = invoice.Amount,
-                Payments = invoice.Payments,
-                AmountPaid = invoice.AmountPaid,
-                TaxAmount = invoice.TaxAmount,
-                Type = invoice.Type
-            });
-        }
+        #region First Payment
 
-        private static string ProcessSubsequentPayment(Payment payment, Invoice invoice)
-        {
-            string responseMessage;
-            if (payment.Amount > invoice.Amount)
-            {
-                responseMessage = "the payment is greater than the invoice amount";
-            }
-            else if (invoice.Amount == payment.Amount)
-            {
-                switch (invoice.Type)
-                {
-                    case InvoiceType.Standard:
-                        CalculateAmountPaid(payment, invoice);
-                        responseMessage = InvoiceIsNowFullPaid;
-                        break;
-                    case InvoiceType.Commercial:
-                        CalculateAmountPaid(payment, invoice);
-                        responseMessage = InvoiceIsNowFullPaid;
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
-            else
-            {
-                switch (invoice.Type)
-                {
-                    case InvoiceType.Standard:
-                        CalculateAmountPaid(payment, invoice);
-                        responseMessage = InvoiceIsNowPartialPaid;
-                        break;
-                    case InvoiceType.Commercial:
-                        CalculateAmountPaid(payment, invoice);
-                        responseMessage = InvoiceIsNowPartialPaid;
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
-
-            return responseMessage;
-        }
-
-        private static void CalculateAmountPaid(Payment payment, Invoice inv)
-        {
-            inv.AmountPaid = payment.Amount;
-            inv.TaxAmount = payment.Amount * 0.14m;
-            inv.Payments.Add(payment);
-        }
-
-        private string ProcessFirstPayment(Payment payment, Invoice invoice)
+        private string ProcessFirstPayment(Payment payment, AddInvoiceModel invoice)
         {
             string responseMessage;
             if (invoice.Payments.Sum(x => x.Amount) != 0 && invoice.Amount == invoice.Payments.Sum(x => x.Amount))
@@ -143,52 +87,102 @@ namespace RefactorThis.Domain.Invoices.Services
             {
                 if ((invoice.Amount - invoice.AmountPaid) == payment.Amount)
                 {
-                    switch (invoice.Type)
-                    {
-                        case InvoiceType.Standard:
-                            CalculateInvoiceTypeStandard(payment, invoice);
-                            responseMessage = FinalPartialPaymentReceived;
-                            break;
-                        case InvoiceType.Commercial:
-                            CalculateInvoiceTypeCommercial(payment, invoice);
-                            responseMessage = FinalPartialPaymentReceived;
-                            break;
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
+                    responseMessage = CalculateFirstPayment(payment, invoice, FinalPartialPaymentReceived);
                 }
                 else
                 {
-                    switch (invoice.Type)
-                    {
-                        case InvoiceType.Standard:
-                            CalculateInvoiceTypeStandard(payment, invoice);
-                            responseMessage = AnotherPartialPaymentReceived;
-                            break;
-                        case InvoiceType.Commercial:
-                            CalculateInvoiceTypeCommercial(payment, invoice);
-                            responseMessage = AnotherPartialPaymentReceived;
-                            break;
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
+                    responseMessage = CalculateFirstPayment(payment, invoice, AnotherPartialPaymentReceived);
                 }
             }
 
             return responseMessage;
         }
 
-        private static void CalculateInvoiceTypeCommercial(Payment payment, Invoice invoice)
+        private string CalculateFirstPayment(Payment payment, AddInvoiceModel invoice, string responseMessageToReturn)
+        {
+            switch (invoice.Type)
+            {
+                case InvoiceType.Standard:
+                    CalculateInvoiceTypeStandard(payment, invoice);
+                    return responseMessageToReturn;
+                case InvoiceType.Commercial:
+                    CalculateInvoiceTypeCommercial(payment, invoice);
+                    return responseMessageToReturn;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private static void CalculateInvoiceTypeCommercial(Payment payment, AddInvoiceModel invoice)
         {
             invoice.AmountPaid += payment.Amount;
             invoice.TaxAmount += payment.Amount * 0.14m;
             invoice.Payments.Add(payment);
         }
 
-        private static void CalculateInvoiceTypeStandard(Payment payment, Invoice invoice)
+        private static void CalculateInvoiceTypeStandard(Payment payment, AddInvoiceModel invoice)
         {
             invoice.AmountPaid += payment.Amount;
             invoice.Payments.Add(payment);
+        }
+
+        #endregion
+
+        #region Subsequent Payment
+
+        private string ProcessSubsequentPayment(Payment payment, AddInvoiceModel invoice)
+        {
+            string responseMessage;
+            if (payment.Amount > invoice.Amount)
+            {
+                responseMessage = "the payment is greater than the invoice amount";
+            }
+            else if (invoice.Amount == payment.Amount)
+            {
+                responseMessage = CalculateSubsequentPayment(payment, invoice, InvoiceIsNowFullPaid);
+            }
+            else
+            {
+                responseMessage = CalculateSubsequentPayment(payment, invoice, InvoiceIsNowPartialPaid);
+            }
+
+            return responseMessage;
+        }
+
+        private string CalculateSubsequentPayment(Payment payment, AddInvoiceModel invoice, string responseMessageToReturn)
+        {
+            switch (invoice.Type)
+            {
+                case InvoiceType.Standard:
+                    CalculateAmountPaid(payment, invoice);
+                    return responseMessageToReturn;
+                case InvoiceType.Commercial:
+                    CalculateAmountPaid(payment, invoice);
+                    return responseMessageToReturn;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private static void CalculateAmountPaid(Payment payment, AddInvoiceModel inv)
+        {
+            inv.AmountPaid = payment.Amount;
+            inv.TaxAmount = payment.Amount * 0.14m;
+            inv.Payments.Add(payment);
+        }
+
+        #endregion
+
+        #region CRUD
+
+        private void AddInvoice(AddInvoiceModel invoice)
+        {
+            if (invoice.Amount == 0 && invoice.Payments.Count == 0)
+            {
+                return;
+            }
+
+            _addInvoice.Handle(invoice);
         }
 
         private Invoice GetInvoiceByReference(Payment payment)
@@ -196,5 +190,7 @@ namespace RefactorThis.Domain.Invoices.Services
             var query = new GetInvoiceModel { Reference = payment.Reference };
             return _getInvoice.Handle(query);
         }
+
+        #endregion
     }
 }
