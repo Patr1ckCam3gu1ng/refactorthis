@@ -38,7 +38,16 @@
 		<Reference Include="System.Xml" />
 	</ItemGroup>
 	<ItemGroup>
-		<Compile Include="InvoiceService.cs" />
+		<Compile Include="Common\Command\ICommand.cs" />
+		<Compile Include="Common\Command\ICommandHandler.cs" />
+		<Compile Include="Common\Constants.cs" />
+		<Compile Include="Common\Queries\IQuery.cs" />
+		<Compile Include="Common\Queries\IQueryHandler.cs" />
+		<Compile Include="Invoices\Commands\AddInvoice.cs" />
+		<Compile Include="Invoices\Commands\Models\AddInvoiceModel.cs" />
+		<Compile Include="Invoices\Queries\GetInvoiceModel.cs" />
+		<Compile Include="Invoices\Queries\Models\GetInvoiceModel.cs" />
+		<Compile Include="Invoices\Services\InvoiceService.cs" />
 		<Compile Include="Properties\AssemblyInfo.cs" />
 	</ItemGroup>
 	<ItemGroup>
@@ -46,6 +55,9 @@
 	    <Project>{33cdc796-ff75-449c-9637-59c2efc46361}</Project>
 	    <Name>RefactorThis.Persistence</Name>
 	  </ProjectReference>
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Products\" />
 	</ItemGroup>
 	<Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 	<!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
